@@ -132,8 +132,12 @@ class DQN():
                         else self.epsilon
         
 if __name__ == '__main__':
+    seed = 42
+    T.manual_seed(seed)
+    np.random.seed(seed)
     import gym
     env = gym.make('LunarLander-v2')
+    env.seed(seed)
 
     agent = DQN(gamma=0.99,
                 epsilon=1.0, 
@@ -162,9 +166,6 @@ if __name__ == '__main__':
             observation = observation_
         scores.append(score)
         eps_history.append(agent.epsilon)
-
         avg_score = np.mean(scores[-100:])
 
         print('episode ', i, 'score %.2f' % score, 'average score %.2f' % avg_score, 'epsilon %.2f' % agent.epsilon)
-    x = [i+1 for i in range(n_games)]
-    filename = 'lunar_lander_2024.png'
