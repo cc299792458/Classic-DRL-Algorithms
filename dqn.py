@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+#TODO: add log. debug.
 
 class DeepQNetwork(nn.Module):
     """
@@ -45,11 +46,11 @@ class ReplayBuffer:
         self.done_memory = np.zeros(self.mem_size, dtype=np.bool8)
         self.mem_cntr = 0
     
-    def store_transition(self, state, action, state_, reward, done):
+    def store_transition(self, state, action, new_state, reward, done):
         index = self.mem_cntr % self.mem_size
         self.state_memory[index] = state
         self.action_memory[index] = action
-        self.new_state_memory[index] = state_
+        self.new_state_memory[index] = new_state
         self.reward_memory[index] = reward
         self.done_memory[index] = done
 
@@ -90,14 +91,14 @@ class DQN():
         self.update_target_network()
         self.replaybuffer = ReplayBuffer(input_dims=input_dims, batch_size=batch_size, mem_size=max_mem_size)
         
-    def store_transition(self, state, action, state_, reward, done):
-        self.replaybuffer.store_transition(state=state, action=action, state_=state_, reward=reward, done=done)
+    def store_transition(self, state, action, new_state, reward, done):
+        self.replaybuffer.store_transition(state=state, action=action, new_state=new_state, reward=reward, done=done)
 
-    def choose_action(self, observation):
+    def choose_action(self, obs):
         if np.random.random() > self.epsilon:
-            state = T.tensor([observation]).to(self.Q_eval.device)
-            q = self.Q_eval.forward(state)
-            action = T.argmax(q).item()
+            state_t = T.tensor(obs).unsqueeze(0).to(self.Q_eval.device)
+            q = self.Q_eval.forward(state_t)
+            action = T.argmax(q).detach().item()
         else:
             action = np.random.choice(self.action_space)
 
@@ -116,7 +117,7 @@ class DQN():
 
         q_eval = self.Q_eval.forward(state_batch)[batch_index, action_batch]
         #NOTE: when use Q_target, its performance is low, why?
-        # q_next = self.Q_eval.forward(new_state_batch)
+        q_next_ = self.Q_eval.forward(new_state_batch)
         q_next = self.Q_target.forward(new_state_batch)
         q_next[done_batch] = 0.0
         q_target = reward_batch + self.gamma * T.max(q_next, dim=1)[0]
@@ -152,18 +153,19 @@ if __name__ == '__main__':
     for i in range(n_games):
         score = 0
         done = False
-        observation = env.reset()
+        obs = env.reset()
         while not done:
-            action = agent.choose_action(observation)
-            observation_, reward, done, info = env.step(action)
+            # rollout is a single worker.
+            action = agent.choose_action(obs)
+            new_obs, reward, done, info = env.step(action)
             score += reward
-            agent.store_transition(state=observation, 
+            agent.store_transition(state=obs, 
                                    action=action, 
-                                   state_=observation_,
+                                   new_state=new_obs,
                                    reward=reward,
                                    done=done)
             agent.learn()
-            observation = observation_
+            obs = new_obs
         scores.append(score)
         eps_history.append(agent.epsilon)
         avg_score = np.mean(scores[-100:])
