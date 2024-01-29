@@ -119,7 +119,19 @@ class DQN:
         self.optimizer.step()
     
 if __name__ == '__main__':
-    wandb.init(project="classic-drl-algorithms", entity="cc299792458", name='dqn')
+    wandb.init(project="classic-drl-algorithms", entity="cc299792458", name='dqn',
+               config={
+                "gamma": GAMMA,
+                "batch size": BATCH_SIZE,
+                "buffer size": BUFFER_SIZE,
+                "min replay size": MIN_REPLAY_SIZE, 
+                "epsilon start": EPSILON_START,
+                "epsilon end": EPSILON_END,
+                "epsilon decay step": EPSILON_DECAY_STEP, 
+                "target update freq": TARGET_UPDATE_FREQ, 
+                "learning rate": LEARNING_RATE,
+                "total step": TOTAL_STEP,
+                })
 
     seed = 42
     random.seed(seed)
