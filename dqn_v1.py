@@ -109,10 +109,9 @@ class DQN:
 
         # Compute Loss
         q_values = self.Q_eval(obses_t)
-
         action_q_values = torch.gather(input=q_values, dim=1, index=actions_t)
-
-        loss = nn.functional.mse_loss(action_q_values, targets)
+        # loss = nn.functional.mse_loss(action_q_values, targets)
+        loss = nn.functional.smooth_l1_loss(action_q_values, targets)
 
         # Gradient Descent
         self.optimizer.zero_grad()
@@ -120,65 +119,44 @@ class DQN:
         self.optimizer.step()
     
 if __name__ == '__main__':
-    env = gym.make('CartPole-v0')
-    
-    # replay_buffer = deque(maxlen=BUFFER_SIZE)
-    # replay_buffer = ReplayBuffer(buffer_size=BUFFER_SIZE, batch_size=BATCH_SIZE)
-    rew_buffer = deque([0.0], maxlen=100)
+    wandb.init(project="classic-drl-algorithms", entity="cc299792458", name='dqn')
 
+    seed = 42
+    random.seed(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    
+    env = gym.make('CartPole-v0')
+    env.seed(seed)
+    rew_buffer = deque([0.0], maxlen=100)
+    length_buffer = deque([0.0], maxlen=100)
     episode_reward = 0.0
+    episode_length = 0.0
 
     agent = DQN(input_dims=int(np.prod(env.observation_space.shape)), n_actions=env.action_space.n)
     agent.update_target_network()
 
-    wandb.init(project="classic-drl-algorithms", entity="cc299792458", name='dqn')
-
-    # online_net = DeepQNetwork(env)
-    # target_net = DeepQNetwork(env)
-    # target_net.load_state_dict(online_net.state_dict())
-    # optimizer = optim.Adam(online_net.parameters(), lr=LEARNING_RATE)
-
-    # Initialize Replay Buffer
     obs = env.reset()
-
     for _ in range(MIN_REPLAY_SIZE):
         action = env.action_space.sample()
-
         new_obs, rew, done, info = env.step(action)
         transition = (obs, action, rew, done, new_obs)
-        # replay_buffer.append(transition)
         agent.store_transition(transition=transition)
-
         obs = new_obs
-
         if done:
             obs = env.reset()
 
     # Main Training Loop
     obs = env.reset()
-    # for step in itertools.count():
     for step in range(TOTAL_STEP):
         action = agent.act(obs)
-        # epsilon = np.interp(step, [0, EPSILON_DECAY], [EPSILON_START, EPSILON_END])
-        
-        # rnd_sample = random.random()
-        
-        # if rnd_sample <= epsilon:
-        #     action = env.action_space.sample()
-        # else:
-        #     action = online_net.act(obs)
-
         new_obs, rew, done, info = env.step(action)
         transition = (obs, action, rew, done, new_obs)
-        # replay_buffer.append(transition)
         agent.store_transition(transition=transition)
         obs = new_obs
-
         episode_reward += rew
-
         if done:
             obs = env.reset()
-
             rew_buffer.append(episode_reward)
             episode_reward = 0.0
 
@@ -187,54 +165,14 @@ if __name__ == '__main__':
             if np.mean(rew_buffer) >= 195:
                 while True:
                     action = agent.act(obs)
-
                     obs, _, done, _ = env.step(action)
                     env.render()
                     if done:
                         env.reset()
 
-        # Start Gradient Step
         agent.learn()
-        # Update Target Network
         if step % TARGET_UPDATE_FREQ == 0:
             agent.update_target_network()
-
-        # transitions = random.sample(replay_buffer, BATCH_SIZE)
-        # batch = replay_buffer.generate_batch()
-
-        # obses = np.asanyarray([t[0] for t in batch])
-        # actions = np.asanyarray([t[1] for t in batch])
-        # rews = np.asanyarray([t[2] for t in batch])
-        # dones = np.asanyarray([t[3] for t in batch])
-        # new_obses = np.asanyarray([t[4] for t in batch])
-
-        # obses_t = torch.as_tensor(obses, dtype=torch.float32)
-        # actions_t = torch.as_tensor(actions, dtype=torch.int64).unsqueeze(-1)
-        # rews_t = torch.as_tensor(rews, dtype=torch.float32).unsqueeze(-1)
-        # dones_t = torch.as_tensor(dones, dtype=torch.float32).unsqueeze(-1)
-        # new_obses_t = torch.as_tensor(new_obses, dtype=torch.float32)
-
-        # # Compute Targets
-        # target_q_values = target_net(new_obses_t)
-        # max_target_q_values = target_q_values.max(dim=1, keepdim=True)[0]
-
-        # targets = rews_t + GAMMA * (1 - dones_t) * max_target_q_values
-
-        # # Compute Loss
-        # q_values = online_net(obses_t)
-
-        # action_q_values = torch.gather(input=q_values, dim=1, index=actions_t)
-
-        # loss = nn.functional.smooth_l1_loss(action_q_values, targets)
-
-        # # Gradient Descent
-        # optimizer.zero_grad()
-        # loss.backward()
-        # optimizer.step()
-
-        # # Update Target Network
-        # if step % TARGET_UPDATE_FREQ == 0:
-        #     target_net.load_state_dict(online_net.state_dict())
 
         # Logging
         wandb.log({'Avg Reward': np.mean(rew_buffer), 'epsilon': agent.epsilon})
