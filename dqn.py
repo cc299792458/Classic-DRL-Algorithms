@@ -3,7 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
-#TODO: add log. debug.
+
+import gym
+import wandb
+import random
+#TODO: debug.
 
 class DeepQNetwork(nn.Module):
     """
@@ -117,8 +121,8 @@ class DQN():
 
         q_eval = self.Q_eval.forward(state_batch)[batch_index, action_batch]
         #NOTE: when use Q_target, its performance is low, why?
-        q_next_ = self.Q_eval.forward(new_state_batch)
-        q_next = self.Q_target.forward(new_state_batch)
+        q_next = self.Q_eval.forward(new_state_batch)
+        q_next_ = self.Q_target.forward(new_state_batch)
         q_next[done_batch] = 0.0
         q_target = reward_batch + self.gamma * T.max(q_next, dim=1)[0]
 
@@ -134,11 +138,15 @@ class DQN():
         
 if __name__ == '__main__':
     seed = 42
+    random.seed(seed)
     T.manual_seed(seed)
     np.random.seed(seed)
-    import gym
     env = gym.make('LunarLander-v2')
     env.seed(seed)
+    env_eval = gym.make('LunarLander-v2')
+    env_eval.seed(seed)
+
+    wandb.init(project="classic-drl-algorithms", entity="cc299792458", name='dqn_wo_tgtn')
 
     agent = DQN(gamma=0.99,
                 epsilon=1.0, 
@@ -148,7 +156,7 @@ if __name__ == '__main__':
                 batch_size=64,
                 eps_min=0.01)
     scores, eps_history = [], []
-    n_games = 1000
+    n_games = 1500
 
     for i in range(n_games):
         score = 0
@@ -169,5 +177,16 @@ if __name__ == '__main__':
         scores.append(score)
         eps_history.append(agent.epsilon)
         avg_score = np.mean(scores[-100:])
-
+        
         print('episode ', i, 'score %.2f' % score, 'average score %.2f' % avg_score, 'epsilon %.2f' % agent.epsilon)
+        wandb.log({'score': score, 'avg_score': avg_score, 'epsilon': agent.epsilon})
+
+        # Render to see the performance of trained agent.
+        if i % 50 == 0:
+            obs = env_eval.reset()
+            done = False
+            while not done:
+                env_eval.render()
+                action = agent.choose_action(obs)
+                obs, reward, done, info = env_eval.step(action)
+            # env.close()
